@@ -13,8 +13,28 @@ discovery.docker "containers" {
   host = "unix:///var/run/docker.sock"
 }
 
+discovery.relabel "docker_service_labels" {
+  targets = []
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "service"
+    action        = "replace"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+    action        = "replace"
+  }
+}
+
 loki.source.docker "containers" {
   host       = "unix:///var/run/docker.sock"
   targets    = discovery.docker.containers.targets
+  labels     = { job = "docker", stack = "local-stack" }
+  relabel_rules = discovery.relabel.docker_service_labels.rules
   forward_to = [loki.write.default.receiver]
 }
