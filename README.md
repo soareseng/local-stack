@@ -143,6 +143,20 @@ Install test dependencies:
 pip install -r requirements-dev.txt
 ```
 
+Dependency locking is managed with `uv` using source files plus generated lock files:
+
+- Source inputs: `services/requirements.in`, `requirements-dev.in`
+- Generated, pinned + hashed outputs: `services/requirements.txt`, `requirements-dev.txt`
+
+Regenerate both lock files:
+
+```bash
+uv pip compile services/requirements.in --generate-hashes --python-version 3.14 --output-file services/requirements.txt
+uv pip compile requirements-dev.in --generate-hashes --python-version 3.14 --output-file requirements-dev.txt
+```
+
+The service runtime image is aligned to Python `3.14` in `services/Dockerfile.api`.
+
 Run tests with coverage:
 
 ```bash
