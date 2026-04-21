@@ -17,7 +17,7 @@ A local stack with APIs, gateway, and observability for development.
 - `user-api`, `billing-api`, `ml-api`: Flask APIs
 - `prometheus`: metrics scraping
 - `loki`: log storage
-- `promtail`: container log collection
+- `alloy`: container log collection and forwarding
 - `jaeger`: distributed tracing
 - `grafana`: metrics, logs, and traces visualization
 - `cadvisor`: container metrics
@@ -179,7 +179,7 @@ Pytest configuration lives in `pytest.ini`.
 ## Observability
 
 - Metrics: `/metrics` endpoint on each API
-- Logs: collected by Promtail and sent to Loki
+- Logs: collected by Alloy and sent to Loki
 - Traces: sent by APIs to Jaeger via OTLP
 - Grafana: Prometheus, Loki, and Jaeger datasources are pre-provisioned
 
