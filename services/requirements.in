@@ -1,0 +1,7 @@
+flask
+prometheus-flask-exporter
+opentelemetry-sdk
+opentelemetry-exporter-otlp
+opentelemetry-instrumentation-flask
+requests
+redis
