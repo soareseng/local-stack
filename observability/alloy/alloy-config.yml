@@ -3,6 +3,50 @@ logging {
   format = "json"
 }
 
+otelcol.receiver.otlp "services" {
+  grpc {
+    endpoint = "0.0.0.0:4317"
+  }
+
+  http {
+    endpoint = "0.0.0.0:4318"
+  }
+
+  output {
+    traces = [otelcol.processor.batch.traces.input]
+  }
+}
+
+otelcol.processor.batch "traces" {
+  output {
+    traces = [otelcol.exporter.otlphttp.jaeger.input]
+  }
+}
+
+otelcol.exporter.otlphttp "jaeger" {
+  client {
+    endpoint = "http://jaeger:4318"
+  }
+}
+
+prometheus.remote_write "prometheus" {
+  endpoint {
+    url = "http://prometheus:9090/api/v1/write"
+  }
+}
+
+prometheus.scrape "flask_apis" {
+  targets = [
+    { __address__ = "auth-api:5000", service = "auth-api" },
+    { __address__ = "user-api:5000", service = "user-api" },
+    { __address__ = "billing-api:5000", service = "billing-api" },
+    { __address__ = "ml-api:5000", service = "ml-api" },
+  ]
+
+  metrics_path = "/metrics"
+  forward_to   = [prometheus.remote_write.prometheus.receiver]
+}
+
 loki.write "default" {
   endpoint {
     url = "http://loki:3100/loki/api/v1/push"

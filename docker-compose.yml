@@ -183,7 +183,9 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
     depends_on:
+      - jaeger
       - loki
+      - prometheus
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:12345/-/healthy || exit 1"]
       interval: 10s
@@ -212,6 +214,7 @@ services:
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
+      - --web.enable-remote-write-receiver
     volumes:
       - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     ports:
@@ -253,7 +256,7 @@ services:
     container_name: auth-api
     environment:
       OTEL_SERVICE_NAME: auth-api
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://alloy:4318
       KEYCLOAK_URL: http://keycloak:8080
       KEYCLOAK_REALM: local-dev
       KEYCLOAK_CLIENT_ID: local-stack-client
@@ -264,6 +267,8 @@ services:
       keycloak-bootstrap:
         condition: service_completed_successfully
       redis:
+        condition: service_healthy
+      alloy:
         condition: service_healthy
     ports:
       - "5000:5000"
@@ -282,10 +287,12 @@ services:
     container_name: user-api
     environment:
       OTEL_SERVICE_NAME: user-api
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://alloy:4318
       AUTH_API_URL: http://auth-api:5000
     depends_on:
       auth-api:
+        condition: service_healthy
+      alloy:
         condition: service_healthy
     ports:
       - "5001:5000"
@@ -304,10 +311,12 @@ services:
     container_name: billing-api
     environment:
       OTEL_SERVICE_NAME: billing-api
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://alloy:4318
       AUTH_API_URL: http://auth-api:5000
     depends_on:
       auth-api:
+        condition: service_healthy
+      alloy:
         condition: service_healthy
     ports:
       - "5002:5000"
@@ -326,10 +335,12 @@ services:
     container_name: ml-api
     environment:
       OTEL_SERVICE_NAME: ml-api
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://alloy:4318
       AUTH_API_URL: http://auth-api:5000
     depends_on:
       auth-api:
+        condition: service_healthy
+      alloy:
         condition: service_healthy
     ports:
       - "5003:5000"

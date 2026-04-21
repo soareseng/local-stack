@@ -8,14 +8,6 @@ scrape_configs:
       - targets:
           - prometheus:9090
 
-  - job_name: flask-apis
-    metrics_path: /metrics
-    static_configs:
-      - targets:
-          - user-api:5000
-          - billing-api:5000
-          - ml-api:5000
-
   - job_name: cadvisor
     static_configs:
       - targets:
