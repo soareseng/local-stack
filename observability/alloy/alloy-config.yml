@@ -3,39 +3,18 @@ logging {
   format = "json"
 }
 
-loki.source.docker "containers" {
-  host             = "unix:///var/run/docker.sock"
-  refresh_interval = "5s"
-
-  relabel_rules = [
-    {
-      source_labels = ["__meta_docker_container_name"]
-      regex         = "/(.*)"
-      target_label  = "container"
-      action        = "replace"
-    },
-    {
-      source_labels = ["__meta_docker_container_log_stream"]
-      target_label  = "stream"
-      action        = "replace"
-    },
-    {
-      source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
-      target_label  = "compose_service"
-      action        = "replace"
-    },
-    {
-      source_labels = ["__meta_docker_container_id"]
-      target_label  = "container_id"
-      action        = "replace"
-    },
-  ]
-
-  forward_to = [loki.write.default.receiver]
-}
-
 loki.write "default" {
   endpoint {
     url = "http://loki:3100/loki/api/v1/push"
   }
+}
+
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+}
+
+loki.source.docker "containers" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.docker.containers.targets
+  forward_to = [loki.write.default.receiver]
 }
