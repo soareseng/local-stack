@@ -27,7 +27,7 @@ def _register_health_routes(app: Flask, service_name: str) -> None:
 
 
 def _setup_observability(app: Flask, service_name: str) -> None:
-    otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://jaeger:4318")
+    otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://alloy:4318")
 
     resource = Resource.create({"service.name": service_name})
     provider = TracerProvider(resource=resource)
