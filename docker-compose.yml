@@ -8,6 +8,11 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf
     depends_on:
       - kong
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   kong-db:
     image: postgres:14-alpine
@@ -57,6 +62,11 @@ services:
     ports:
       - "8000:8000"
       - "8001:8001"
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
 
   kong-bootstrap:
     image: curlimages/curl:8.8.0
@@ -76,6 +86,11 @@ services:
       POSTGRES_DB: keycloak
       POSTGRES_USER: keycloak
       POSTGRES_PASSWORD: keycloak
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak -d keycloak"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.0
@@ -88,16 +103,47 @@ services:
       KC_DB_PASSWORD: keycloak
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HEALTH_ENABLED: "true"
     ports:
       - "8080:8080"
     depends_on:
-      - keycloak-db
+      keycloak-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "bash -ec 'exec 3<>/dev/tcp/127.0.0.1/9000; printf \"GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n\" >&3; grep -q \"200\" <&3'"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  keycloak-bootstrap:
+    image: curlimages/curl:8.8.0
+    container_name: keycloak-bootstrap
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    volumes:
+      - ./scripts/keycloak-bootstrap.sh:/scripts/keycloak-bootstrap.sh:ro
+    environment:
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_ADMIN_USER: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KEYCLOAK_REALM: local-dev
+      KEYCLOAK_CLIENT_ID: local-stack-client
+      KEYCLOAK_USER: alice
+      KEYCLOAK_USER_PASSWORD: alice
+    entrypoint: ["/bin/sh", "/scripts/keycloak-bootstrap.sh"]
+    restart: "no"
 
   redis:
     image: redis:7-alpine
     container_name: redis
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   jaeger:
     image: jaegertracing/all-in-one:1.57
@@ -108,6 +154,11 @@ services:
       - "16686:16686"
       - "4317:4317"
       - "4318:4318"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:16686 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
 
   loki:
     image: grafana/loki:3.1.1
@@ -117,6 +168,11 @@ services:
       - ./observability/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
     ports:
       - "3100:3100"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:3100/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
 
   promtail:
     image: grafana/promtail:3.1.1
@@ -128,6 +184,11 @@ services:
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
     depends_on:
       - loki
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:9080/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
 
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:v0.49.1
@@ -139,6 +200,11 @@ services:
       - /var/lib/docker/:/var/lib/docker:ro
     ports:
       - "8088:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
 
   prometheus:
     image: prom/prometheus:v2.54.1
@@ -152,6 +218,11 @@ services:
       - "9090:9090"
     depends_on:
       - cadvisor
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:9090/-/healthy || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
 
   grafana:
     image: grafana/grafana:11.1.5
@@ -167,30 +238,103 @@ services:
       - prometheus
       - loki
       - jaeger
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  auth-api:
+    build:
+      context: ./services
+      dockerfile: Dockerfile.api
+      args:
+        SERVICE_NAME: auth-api
+    container_name: auth-api
+    environment:
+      OTEL_SERVICE_NAME: auth-api
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_REALM: local-dev
+      KEYCLOAK_CLIENT_ID: local-stack-client
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      TOKEN_CACHE_TTL_SECONDS: 60
+    depends_on:
+      keycloak-bootstrap:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    ports:
+      - "5000:5000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health', timeout=2)"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   user-api:
-    build: ./services/user-api
+    build:
+      context: ./services
+      dockerfile: Dockerfile.api
+      args:
+        SERVICE_NAME: user-api
     container_name: user-api
     environment:
       OTEL_SERVICE_NAME: user-api
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+      AUTH_API_URL: http://auth-api:5000
+    depends_on:
+      auth-api:
+        condition: service_healthy
     ports:
       - "5001:5000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health', timeout=2)"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   billing-api:
-    build: ./services/billing-api
+    build:
+      context: ./services
+      dockerfile: Dockerfile.api
+      args:
+        SERVICE_NAME: billing-api
     container_name: billing-api
     environment:
       OTEL_SERVICE_NAME: billing-api
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+      AUTH_API_URL: http://auth-api:5000
+    depends_on:
+      auth-api:
+        condition: service_healthy
     ports:
       - "5002:5000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health', timeout=2)"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   ml-api:
-    build: ./services/ml-api
+    build:
+      context: ./services
+      dockerfile: Dockerfile.api
+      args:
+        SERVICE_NAME: ml-api
     container_name: ml-api
     environment:
       OTEL_SERVICE_NAME: ml-api
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+      AUTH_API_URL: http://auth-api:5000
+    depends_on:
+      auth-api:
+        condition: service_healthy
     ports:
       - "5003:5000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health', timeout=2)"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
