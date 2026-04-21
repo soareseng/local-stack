@@ -50,13 +50,13 @@ docker compose logs -f user-api
          Client
             |
             v
-        ALB/Nginx (80)
+      ALB / Nginx (80)
             |
             v
-    Kong Proxy (8000)
-  |         |         |
-  v         v         v
-User API  Billing API  ML API
+      Kong Proxy (8000)
+       /      |       \
+      v       v        v
+ User API  Billing API  ML API
 ```
 
 ## Access URLs
