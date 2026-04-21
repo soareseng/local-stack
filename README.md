@@ -45,6 +45,20 @@ docker compose ps
 docker compose logs -f user-api
 ```
 
+## Request Flow
+```plaintext
+         Client
+            |
+            v
+        ALB/Nginx (80)
+            |
+            v
+    Kong Proxy (8000)
+  |         |         |
+  v         v         v
+User API  Billing API  ML API
+```
+
 ## Access URLs
 
 - ALB/Nginx: `http://localhost`
