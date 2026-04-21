@@ -112,4 +112,7 @@ ensure_route "billing-api" "billing-api-route" "/api/payments"
 ensure_service "ml-api" "http://ml-api:5000"
 ensure_route "ml-api" "ml-api-route" "/api/ml"
 
+ensure_service "auth-api" "http://auth-api:5000"
+ensure_route "auth-api" "auth-api-route" "/api/auth"
+
 log "Route bootstrap completed successfully."
